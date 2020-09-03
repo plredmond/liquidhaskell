@@ -59,6 +59,7 @@ let
     haskellPackages = haskellPackages;
   };
 in
+  # FIXME
 if makeEnv then drv.env.overrideAttrs devtools else drv
 # use buildenv or shellenv to build all of them here
 # use relative
