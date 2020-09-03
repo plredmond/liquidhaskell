@@ -54,14 +54,10 @@ let
   # ignore files specified by gitignore in nix-build
   source = nixpkgs.nix-gitignore.gitignoreSource [] ./.;
   # use overridden-haskellPackages to call gitignored-source
-  drv = nixpkgs.haskell.lib.overrideCabal haskellPackages.liquidhaskell (
-    old: {
-      passthru = old.passthru // {
-        nixpkgs = nixpkgs;
-        haskellPackages = haskellPackages;
-      };
-    }
-  );
+  drv = {
+    nixpkgs = nixpkgs;
+    haskellPackages = haskellPackages;
+  };
 in
 if makeEnv then drv.env.overrideAttrs devtools else drv
 # use buildenv or shellenv to build all of them here
