@@ -1,7 +1,9 @@
+*.nix
+result
+
 dist
 cabal-dev
 .hsenv
-*.nix
 *.o
 *.hi
 *.chi
