@@ -1,10 +1,10 @@
-{ makeEnv ? false, config ? { /*allowBroken = true;*/ }, ... }:
+{ envFor ? null, config ? { /*allowBroken = true;*/ }, ... }:
 let
   nixpkgs = import (
     builtins.fetchTarball {
-      # fetch latest nixpkgs https://github.com/NixOS/nixpkgs-channels/tree/nixos-20.03 as of Tue 18 Aug 2020 02:51:27 PM UTC
-      url = "https://github.com/NixOS/nixpkgs-channels/archive/cb1996818edf506c0d1665ab147c253c558a7426.tar.gz";
-      sha256 = "0lb6idvg2aj61nblr41x0ixwbphih2iz8xxc05m69hgsn261hk3j";
+      # fetch latest nixpkgs https://github.com/NixOS/nixpkgs-channels/tree/nixos-20.03 as of Fri 11 Sep 2020 05:48:57 AM UTC
+      url = "https://github.com/NixOS/nixpkgs-channels/archive/4bd1938e03e1caa49a6da1ec8cff802348458f05.tar.gz";
+      sha256 = "0529npmibafjr80i2bhqg22pjr3d5qz1swjcq2jkdla1njagkq2k";
     }
   ) { inherit config; };
   # function to make sure a haskell package has z3 at build-time and test-time
@@ -13,53 +13,66 @@ let
   haskellPackages = nixpkgs.haskell.packages."ghc8101".override (
     old: {
       all-cabal-hashes = nixpkgs.fetchurl {
-        # fetch latest cabal hashes https://github.com/commercialhaskell/all-cabal-hashes/tree/hackage as of Tue 18 Aug 2020 02:51:27 PM UTC
-        url = "https://github.com/commercialhaskell/all-cabal-hashes/archive/112fef7b4bf392d4d4c36fbbe00ed061685ba26c.tar.gz";
-        sha256 = "0x0mkpwnndw7n62l089gimd76n9gy749giban9pacf5kxbsfxrdc";
+        # fetch latest cabal hashes https://github.com/commercialhaskell/all-cabal-hashes/tree/hackage as of Fri 11 Sep 2020 05:48:57 AM UTC
+        url = "https://github.com/commercialhaskell/all-cabal-hashes/archive/fdf36e3692e7cd30da7b9da4b1d7b87eb14fe787.tar.gz";
+        sha256 = "1qirm02bv3p11x2bjl72d62lj5lm4a88wg93fi272a8h7a8496wn";
       };
       overrides = self: super: with nixpkgs.haskell.lib; rec {
         mkDerivation = args: super.mkDerivation (
-          args // {
-            doCheck = false;
-            doHaddock = false;
-            jailbreak = true;
-          }
+          args // { doCheck = false; doHaddock = false; jailbreak = true; }
         );
-        liquid-base = usingZ3 (self.callCabal2nix "liquid-base" ./liquid-base {});
-        liquid-bytestring = (self.callCabal2nix "liquid-bytestring" ./liquid-bytestring {});
-        liquid-containers = (self.callCabal2nix "liquid-containers" ./liquid-containers {});
-        liquid-fixpoint = (self.callCabal2nix "liquid-fixpoint" ./liquid-fixpoint {});
-        liquid-ghc-prim = usingZ3 (self.callCabal2nix "liquid-ghc-prim" ./liquid-ghc-prim {});
-        liquid-parallel = (self.callCabal2nix "liquid-parallel" ./liquid-parallel {});
-        liquid-platform = (self.callCabal2nix "liquid-platform" ./liquid-platform {});
-        liquid-prelude = (self.callCabal2nix "liquid-prelude" ./liquid-prelude {});
-        liquid-vector = (self.callCabal2nix "liquid-vector" ./liquid-vector {});
-        liquidhaskell = (self.callCabal2nix "liquidhaskell" ./. {});
-        # TODO turn on tests only for these LH packages
-        #   separate tests
 
-        # # using latest hackage releases as of Tue 18 Aug 2020 02:51:27 PM UTC
+        liquid-fixpoint = self.callCabal2nix "liquid-fixpoint" (nixpkgs.nix-gitignore.gitignoreSource [] ./liquid-fixpoint) {};
+        liquidhaskell = self.callCabal2nix "liquidhaskell" (nixpkgs.nix-gitignore.gitignoreSource [] ./.) {};
+
+        liquid-base = usingZ3 (self.callCabal2nix "liquid-base" ./liquid-base {});
+        liquid-bytestring = usingZ3 (self.callCabal2nix "liquid-bytestring" ./liquid-bytestring {});
+        liquid-containers = usingZ3 (self.callCabal2nix "liquid-containers" ./liquid-containers {});
+        liquid-ghc-prim = usingZ3 (self.callCabal2nix "liquid-ghc-prim" ./liquid-ghc-prim {});
+        liquid-parallel = usingZ3 (self.callCabal2nix "liquid-parallel" ./liquid-parallel {});
+        liquid-vector = usingZ3 (self.callCabal2nix "liquid-vector" ./liquid-vector {});
+
+        liquid-platform = self.callCabal2nix "liquid-platform" ./liquid-platform {};
+        liquid-prelude = usingZ3 (self.callCabal2nix "liquid-prelude" ./liquid-prelude {});
+
+        # using latest hackage releases as of Fri 11 Sep 2020 05:48:57 AM UTC
         hashable = self.callHackage "hashable" "1.3.0.0" {}; # ouch; requires recompilation of around 30 packages
-        # memory = self.callHackage "memory" "0.15.0" {};
         optics = self.callHackage "optics" "0.3" {};
         optics-core = self.callHackage "optics-core" "0.3.0.1" {};
         optics-extra = self.callHackage "optics-extra" "0.3" {};
-        optics-th = self.callHackage "optics-th" "0.3.0.1" {};
-        # tls = self.callHackage "tls" "1.5.4" {};
+        optics-th = self.callHackage "optics-th" "0.3.0.2" {};
       };
     }
   );
-  # function to bring devtools in to a package environment
-  devtools = old: { nativeBuildInputs = old.nativeBuildInputs ++ [ nixpkgs.cabal-install nixpkgs.ghcid ]; }; # ghc and hpack are automatically included
-  # ignore files specified by gitignore in nix-build
-  source = nixpkgs.nix-gitignore.gitignoreSource [] ./.;
-  # use overridden-haskellPackages to call gitignored-source
-  drv = {
-    nixpkgs = nixpkgs;
-    haskellPackages = haskellPackages;
-  };
+  # packages part of this local project
+  projectPackages = with haskellPackages; [
+    liquid-fixpoint
+    liquidhaskell
+
+    liquid-base
+    liquid-bytestring
+    liquid-containers
+    liquid-ghc-prim
+    liquid-parallel
+    liquid-vector
+
+    liquid-platform
+    liquid-prelude
+  ];
 in
-  # FIXME
-if makeEnv then drv.env.overrideAttrs devtools else drv
-# use buildenv or shellenv to build all of them here
-# use relative
+if envFor == null
+then nixpkgs.buildEnv {
+  name = "liquidhaskell-project";
+  paths = projectPackages;
+  passthru = {
+    inherit nixpkgs;
+    inherit haskellPackages;
+    inherit projectPackages;
+  };
+}
+else haskellPackages."${envFor}".env.overrideAttrs
+  (
+    old: {
+      nativeBuildInputs = old.nativeBuildInputs ++ [ nixpkgs.cabal-install nixpkgs.ghcid ];
+    }
+  )
