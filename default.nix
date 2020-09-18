@@ -1,4 +1,13 @@
-{ envFor ? null, config ? { /*allowBroken = true;*/ }, ... }:
+{
+  # Set `mkEnv` to choose whether to return a package or a development
+  # environment. The default is to follow inNixShell.
+  mkEnv ? null
+, # Set `target` to choose the package from haskellPackages which will be
+  # returned (eg. name of a liquidhaskell package).
+  target ? "liquidhaskell_metapackage"
+, # nixpkgs config
+  config ? { allowBroken = true; }
+}:
 let
   nixpkgs = import (
     builtins.fetchTarball {
@@ -9,8 +18,10 @@ let
   ) { inherit config; };
   # function to make sure a haskell package has z3 at build-time and test-time
   usingZ3 = pkg: nixpkgs.haskell.lib.overrideCabal pkg (old: { buildTools = old.buildTools or [] ++ [ nixpkgs.z3 ]; });
-  # override haskell compiler version, add and override dependencies in nixpkgs
-  haskellPackages = nixpkgs.haskell.packages."ghc8101".override (
+  # package set for haskell compiler version
+  haskellCompilerPackages = nixpkgs.haskell.packages."ghc8101";
+  # override package set to inject project components
+  haskellPackages = haskellCompilerPackages.override (
     old: {
       all-cabal-hashes = nixpkgs.fetchurl {
         # fetch latest cabal hashes https://github.com/commercialhaskell/all-cabal-hashes/tree/hackage as of Fri 11 Sep 2020 05:48:57 AM UTC
@@ -18,19 +29,29 @@ let
         sha256 = "1qirm02bv3p11x2bjl72d62lj5lm4a88wg93fi272a8h7a8496wn";
       };
       overrides = self: super: with nixpkgs.haskell.lib; rec {
+        # turn off tests and haddocks and version bounds by default
         mkDerivation = args: super.mkDerivation (
           args // { doCheck = false; doHaddock = false; jailbreak = true; }
         );
-
-        liquid-fixpoint = self.callCabal2nix "liquid-fixpoint" (nixpkgs.nix-gitignore.gitignoreSource [] ./liquid-fixpoint) {};
+        # declare each of the packages contained in this repo
+        ## LH support packages
         liquidhaskell = self.callCabal2nix "liquidhaskell" (nixpkgs.nix-gitignore.gitignoreSource [] ./.) {};
-
-        # using latest hackage releases as of Fri 11 Sep 2020 05:48:57 AM UTC
+        liquid-fixpoint = overrideCabal (self.callCabal2nix "liquid-fixpoint" (nixpkgs.nix-gitignore.gitignoreSource [] ./liquid-fixpoint) {})
+          (old: { preCheck = ''export PATH="$PWD/dist/build/fixpoint:$PATH"''; }); # bring the `fixpoint` binary into scope for tests run by nix-build
+        # dependencies
+        ## declare dependencies using the latest hackage releases as of Fri 11 Sep 2020 05:48:57 AM UTC
         hashable = self.callHackage "hashable" "1.3.0.0" {}; # ouch; requires recompilation of around 30 packages
         optics = self.callHackage "optics" "0.3" {};
         optics-core = self.callHackage "optics-core" "0.3.0.1" {};
         optics-extra = self.callHackage "optics-extra" "0.3" {};
         optics-th = self.callHackage "optics-th" "0.3.0.2" {};
+
+        liquidhaskell_metapackage = nixpkgs.haskell.lib.overrideCabal super.hello (
+          old: {
+            buildDepends = old.buildDepends or [] ++ projectPackages;
+            passthru = { inherit nixpkgs; inherit haskellPackages; inherit projectPackages; };
+          }
+        );
       };
     }
   );
@@ -39,20 +60,13 @@ let
     liquid-fixpoint
     liquidhaskell
   ];
+  # derivation to build
+  drv = haskellPackages."${target}";
 in
-if envFor == null
-then nixpkgs.buildEnv {
-  name = "liquidhaskell-project";
-  paths = projectPackages;
-  passthru = {
-    inherit nixpkgs;
-    inherit haskellPackages;
-    inherit projectPackages;
-  };
-}
-else haskellPackages."${envFor}".env.overrideAttrs
-  (
-    old: {
-      nativeBuildInputs = old.nativeBuildInputs ++ [ nixpkgs.cabal-install nixpkgs.ghcid ];
-    }
-  )
+if
+  (mkEnv != null && mkEnv) || (mkEnv == null && nixpkgs.lib.inNixShell)
+then
+  drv.env.overrideAttrs
+    (old: { nativeBuildInputs = old.nativeBuildInputs ++ [ nixpkgs.cabal-install nixpkgs.ghcid ]; })
+else
+  drv
