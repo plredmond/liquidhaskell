@@ -1,34 +1,3 @@
-/*
-
-1) Build and test all of the packages in the project: This will build the
-`liquidhaskell_test-runner-metapackage`, which depends on everything else and
-builds & tests the `liquidhaskell` package.
-
-    nix-build --no-out-link
-
-2) Enter an environment suitable for development & testing of the
-`liquidhaskell` package: This is the deveoplment environment of the
-`liquidhaskell_test-runner-metapackage`. All of the other packages are
-installed in this environment, including an un-tested instance of the
-`liquidhaskell` package.
-
-    nix-shell
-
-3) Build and test one package in the project: This will build and test only the
-named package. You could name anything in haskellPackages but only components
-of liquid haskell have their tests enabled. Don't use this for the
-`liquidhaskell` project, for that use #1.
-
-    nix-build --argstr target liquid-vector
-
-4) enter an environment suitable for development & testing of one package in
-the project: You could name anything in haskellPackages. Don't use this for the
-`liquidhaskell` package itself because you wont have the rest of the project
-available and so its tests wont run, for that use #2 above.
-
-    nix-shell --argstr target liquid-vector
-
-*/
 {
   # Set `mkEnv` to choose whether to return a package or a development
   # environment. The default is to follow inNixShell.
@@ -45,9 +14,9 @@ available and so its tests wont run, for that use #2 above.
 let
   nixpkgs = import (
     builtins.fetchTarball {
-      # fetch latest nixpkgs https://github.com/NixOS/nixpkgs-channels/tree/nixos-20.03 as of Fri 11 Sep 2020 05:48:57 AM UTC
-      url = "https://github.com/NixOS/nixpkgs-channels/archive/4bd1938e03e1caa49a6da1ec8cff802348458f05.tar.gz";
-      sha256 = "0529npmibafjr80i2bhqg22pjr3d5qz1swjcq2jkdla1njagkq2k";
+      # fetch latest nixpkgs https://github.com/NixOS/nixpkgs-channels/tree/nixos-20.03 as of Fri 18 Sep 2020 11:07:29 PM UTC
+      url = "https://github.com/NixOS/nixpkgs-channels/archive/faf5bdea5d9f0f9de26deaa7e864cdcd3b15b4e8.tar.gz";
+      sha256 = "1sgfyxi4wckivnbniwmg4l6n9v5z6v53c5467d7k7pr2h6nwssfn";
     }
   ) { inherit config; };
   # helper to turn on tests, haddocks, and have z3 around
@@ -62,32 +31,31 @@ let
   haskellPackages = haskellCompilerPackages.override (
     old: {
       all-cabal-hashes = nixpkgs.fetchurl {
-        # fetch latest cabal hashes https://github.com/commercialhaskell/all-cabal-hashes/tree/hackage as of Fri 11 Sep 2020 05:48:57 AM UTC
-        url = "https://github.com/commercialhaskell/all-cabal-hashes/archive/fdf36e3692e7cd30da7b9da4b1d7b87eb14fe787.tar.gz";
-        sha256 = "1qirm02bv3p11x2bjl72d62lj5lm4a88wg93fi272a8h7a8496wn";
+        # fetch latest cabal hashes https://github.com/commercialhaskell/all-cabal-hashes/tree/hackage as of Fri 18 Sep 2020 11:08:25 PM UTC
+        url = "https://github.com/commercialhaskell/all-cabal-hashes/archive/95c936f1dad30718d4fd37673fe5ee204c60a442.tar.gz";
+        sha256 = "1z9zfa8z06w6ks54z3a2afrrg3mzpi3xik617x9nkkdl0vvn2riz";
       };
       overrides = self: super: with nixpkgs.haskell.lib; rec {
         # turn off tests and haddocks and version bounds by default
         mkDerivation = args: super.mkDerivation (
           args // { doCheck = false; doHaddock = false; jailbreak = true; }
         );
-        # declare each of the packages contained in this repo
+        # declare each of the liquid-haskell packages using the latest hackage releases as of Fri 18 Sep 2020 11:17:35 PM UTC
         ## LH support packages
-        liquidhaskell = self.callCabal2nix "liquidhaskell" (nixpkgs.nix-gitignore.gitignoreSource [] ./.) {}; # no tests are run; we define a separate package below to run the tests
-        liquid-fixpoint = beComponent (self.callCabal2nix "liquid-fixpoint" (nixpkgs.nix-gitignore.gitignoreSource [] ./liquid-fixpoint) {})
-          (old: { preCheck = ''export PATH="$PWD/dist/build/fixpoint:$PATH"''; }); # bring the `fixpoint` binary into scope for tests run by nix-build
+        liquidhaskell = self.callHackage "liquidhaskell" "0.8.10.2" {};
+        liquid-fixpoint = self.callHackage "liquid-fixpoint" "0.8.10.2" {};
         ## LH spec packages
-        liquid-base = beComponent (self.callCabal2nix "liquid-base" ./liquid-base {}) (_: { doHaddock = false; });
-        liquid-bytestring = beComponent (self.callCabal2nix "liquid-bytestring" ./liquid-bytestring {}) (_: { doHaddock = false; });
-        liquid-containers = beComponent (self.callCabal2nix "liquid-containers" ./liquid-containers {}) (_: {});
-        liquid-ghc-prim = beComponent (self.callCabal2nix "liquid-ghc-prim" ./liquid-ghc-prim {}) (_: { doHaddock = false; });
-        liquid-parallel = beComponent (self.callCabal2nix "liquid-parallel" ./liquid-parallel {}) (_: {});
-        liquid-vector = beComponent (self.callCabal2nix "liquid-vector" ./liquid-vector {}) (_: {});
+        liquid-base = beComponent (self.callHackage "liquid-base" "4.14.1.0" {}) (_: { doHaddock = false; });
+        liquid-bytestring = beComponent (self.callHackage "liquid-bytestring" "0.10.10.0" {}) (_: { doHaddock = false; });
+        liquid-containers = beComponent (self.callHackage "liquid-containers" "0.6.2.1" {}) (_: {});
+        liquid-ghc-prim = beComponent (self.callHackage "liquid-ghc-prim" "0.6.1" {}) (_: { doHaddock = false; });
+        liquid-parallel = beComponent (self.callHackage "liquid-parallel" "3.2.2.0" {}) (_: {});
+        liquid-vector = beComponent (self.callHackage "liquid-vector" "0.12.1.2" {}) (_: {});
         ## LH bundles
-        liquid-platform = beComponent (self.callCabal2nix "liquid-platform" ./liquid-platform {}) (_: {});
-        liquid-prelude = beComponent (self.callCabal2nix "liquid-prelude" ./liquid-prelude {}) (_: { doHaddock = false; });
+        liquid-platform = beComponent (self.callHackage "liquid-platform" "0.8.10.2" {}) (_: {});
+        liquid-prelude = beComponent (self.callHackage "liquid-prelude" "0.8.10.2" {}) (_: { doHaddock = false; });
         # dependencies
-        ## declare dependencies using the latest hackage releases as of Fri 11 Sep 2020 05:48:57 AM UTC
+        ## declare dependencies using the latest hackage releases as of Fri 18 Sep 2020 11:18:16 PM UTC
         hashable = self.callHackage "hashable" "1.3.0.0" {}; # ouch; requires recompilation of around 30 packages
         optics = self.callHackage "optics" "0.3" {};
         optics-core = self.callHackage "optics-core" "0.3.0.1" {};
